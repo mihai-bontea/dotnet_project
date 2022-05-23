@@ -209,19 +209,13 @@ public static class Program
             fileWriter.Write(totalPropertyCount * 2); // TileBlockHeader: StringCount
             fileWriter.Write(0); //TileBlockHeader: CharactersCount
 
-            // Take note of the offset within the file for this field
             var coPosition = fileWriter.BaseStream.Position;
-            // Write a placeholder value to reserve space in the file
             fileWriter.Write((long)0); // TileBlockHeader: CoordinatesOffsetInBytes (placeholder)
 
-            // Take note of the offset within the file for this field
             var soPosition = fileWriter.BaseStream.Position;
-            // Write a placeholder value to reserve space in the file
             fileWriter.Write((long)0); // TileBlockHeader: StringsOffsetInBytes (placeholder)
 
-            // Take note of the offset within the file for this field
             var choPosition = fileWriter.BaseStream.Position;
-            // Write a placeholder value to reserve space in the file
             fileWriter.Write((long)0); // TileBlockHeader: CharactersOffsetInBytes (placeholder)
 
             // Write MapFeatures
@@ -238,7 +232,6 @@ public static class Program
                 fileWriter.Write(featureData.PropertyKeys.keys.Count); // MapFeature: PropertyCount
             }
 
-            // Record the current position in the stream
             var currentPosition = fileWriter.BaseStream.Position;
             // Seek back in the file to the position of the field
             fileWriter.Seek((int)coPosition, SeekOrigin.Begin);
@@ -309,13 +302,9 @@ public static class Program
                 var featureData = featuresData[t];
                 for (var i = 0; i < featureData.PropertyKeys.keys.Count; ++i)
                 {
-                    // each 'property' (key) will be just one short in memory, reducing space occupied
                     string k = featureData.PropertyKeys.keys[i];
                     fileWriter.Write((short)PropToEnumCode(k));
-
-                    // each 'sub-property' (value) will also be just a short in memory if the predefined
-                    // enum is found. Otherwise it means it has to be some string like a name of a city, in that
-                    // case we shall write the whole string. Still, memory will be saved
+                    
                     string v = featureData.PropertyValues.values[i];
                     if (SubPropToEnumCode(v) != FeatureSubProp.Unknown)
                     {
@@ -332,7 +321,6 @@ public static class Program
             }
         }
 
-        // Seek to the beginning of the file, just before the first TileHeaderEntry
         fileWriter.Seek(Marshal.SizeOf<FileHeader>(), SeekOrigin.Begin);
         foreach (var (tileId, offset) in offsets)
         {
@@ -343,7 +331,6 @@ public static class Program
         fileWriter.Flush();
     }
     
-    // basically the 'key' of the property
     private static FeatureProp PropToEnumCode(string propName)
     {
         var dict = new Dictionary<string, FeatureProp>
