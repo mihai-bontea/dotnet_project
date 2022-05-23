@@ -22,22 +22,20 @@ public static class Program
             switch (blob.Type)
             {
                 case BlobType.Primitive:
-                    {
-                        var primitiveBlock = blob.ToPrimitiveBlock();
-                        foreach (var primitiveGroup in primitiveBlock)
-                            switch (primitiveGroup.ContainedType)
-                            {
-                                case PrimitiveGroup.ElementType.Node:
-                                    foreach (var node in primitiveGroup) nodes[node.Id] = (AbstractNode)node;
-                                    break;
+                    var primitiveBlock = blob.ToPrimitiveBlock();
+                    foreach (var primitiveGroup in primitiveBlock)
+                        switch (primitiveGroup.ContainedType)
+                        {
+                            case PrimitiveGroup.ElementType.Node:
+                                foreach (var node in primitiveGroup) nodes[node.Id] = (AbstractNode)node;
+                                break;
 
-                                case PrimitiveGroup.ElementType.Way:
-                                    foreach (var way in primitiveGroup) ways.Add((Way)way);
-                                    break;
-                            }
+                            case PrimitiveGroup.ElementType.Way:
+                                foreach (var way in primitiveGroup) ways.Add((Way)way);
+                                break;
+                        }
 
-                        break;
-                    }
+                    break;
             }
         });
 
@@ -274,16 +272,27 @@ public static class Program
                 var featureData = featuresData[t];
                 for (var i = 0; i < featureData.PropertyKeys.keys.Count; ++i)
                 {
-                    ReadOnlySpan<char> k = featureData.PropertyKeys.keys[i];
-                    ReadOnlySpan<char> v = featureData.PropertyValues.values[i];
+                    // Add 1 to the offset for keys
+                    string v = featureData.PropertyValues.values[i];
 
-                    fileWriter.Write(stringOffset); // StringEntry: Offset
-                    fileWriter.Write(k.Length); // StringEntry: Length
-                    stringOffset += k.Length;
+                    fileWriter.Write(stringOffset);
+                    fileWriter.Write(1);
+                    stringOffset += 1;
 
-                    fileWriter.Write(stringOffset); // StringEntry: Offset
-                    fileWriter.Write(v.Length); // StringEntry: Length
-                    stringOffset += v.Length;
+                    // If sub-property exists in enum, add 1 to offset
+                    // otherwise, add the whole string
+                    if (SubPropToEnumCode(v) != FeatureSubProp.Unknown)
+                    {
+                        fileWriter.Write(stringOffset);
+                        fileWriter.Write(1);
+                        stringOffset += 1;
+                    }
+                    else
+                    {
+                        fileWriter.Write(stringOffset);
+                        fileWriter.Write(v.Length);
+                        stringOffset += v.Length;
+                    }
                 }
             }
 
@@ -300,16 +309,24 @@ public static class Program
                 var featureData = featuresData[t];
                 for (var i = 0; i < featureData.PropertyKeys.keys.Count; ++i)
                 {
-                    ReadOnlySpan<char> k = featureData.PropertyKeys.keys[i];
-                    foreach (var c in k)
-                    {
-                        fileWriter.Write((short)c);
-                    }
+                    // each 'property' (key) will be just one short in memory, reducing space occupied
+                    string k = featureData.PropertyKeys.keys[i];
+                    fileWriter.Write((short)PropToEnumCode(k));
 
-                    ReadOnlySpan<char> v = featureData.PropertyValues.values[i];
-                    foreach (var c in v)
+                    // each 'sub-property' (value) will also be just a short in memory if the predefined
+                    // enum is found. Otherwise it means it has to be some string like a name of a city, in that
+                    // case we shall write the whole string. Still, memory will be saved
+                    string v = featureData.PropertyValues.values[i];
+                    if (SubPropToEnumCode(v) != FeatureSubProp.Unknown)
                     {
-                        fileWriter.Write((short)c);
+                        fileWriter.Write((short)SubPropToEnumCode(v));
+                    }
+                    else
+                    {
+                        foreach (var c in v)
+                        {
+                            fileWriter.Write((short)c);
+                        }
                     }
                 }
             }
@@ -324,6 +341,89 @@ public static class Program
         }
 
         fileWriter.Flush();
+    }
+    
+    // basically the 'key' of the property
+    private static FeatureProp PropToEnumCode(string propName)
+    {
+        var dict = new Dictionary<string, FeatureProp>
+        {
+            { "admin_level", FeatureProp.AdminLevel },
+            { "place", FeatureProp.Place },
+            { "name", FeatureProp.Name },
+            { "highway", FeatureProp.Highway },
+            { "water", FeatureProp.Water },
+            { "railway", FeatureProp.Railway },
+            { "natural", FeatureProp.Natural },
+            { "boundary", FeatureProp.Boundary },
+            { "landuse", FeatureProp.Landuse },
+            { "building", FeatureProp.Building },
+            { "amenity", FeatureProp.Amenity },
+            { "leisure", FeatureProp.Leisure }
+        };
+        if (dict.ContainsKey(propName))
+            return dict[propName];
+        return FeatureProp.Unknown;
+    }
+    
+    private static FeatureSubProp SubPropToEnumCode(string subPropName)
+    {
+        var dict = new Dictionary<string, FeatureSubProp>
+        {
+            { "motorway", FeatureSubProp.Motorway },
+            { "trunk", FeatureSubProp.Trunk },
+            { "primary", FeatureSubProp.Primary },
+            { "secondary", FeatureSubProp.Secondary },
+            { "tertiary", FeatureSubProp.Tertiary },
+            { "unclassified", FeatureSubProp.Unclassified },
+            { "road", FeatureSubProp.Road },
+            { "natural", FeatureSubProp.Natural },
+            { "fell", FeatureSubProp.Fell },
+            { "grassland", FeatureSubProp.Grassland },
+            { "heath", FeatureSubProp.Heath },
+            { "moor", FeatureSubProp.Moor },
+            { "scrub", FeatureSubProp.Scrub },
+            { "wetland", FeatureSubProp.Wetland },
+            { "wood", FeatureSubProp.Wood },
+            { "tree_row", FeatureSubProp.TreeRow },
+            { "bare_rock", FeatureSubProp.BareRock },
+            { "rock", FeatureSubProp.Rock },
+            { "scree", FeatureSubProp.Scree },
+            { "beach", FeatureSubProp.Beach },
+            { "sand", FeatureSubProp.Sand },
+            { "water", FeatureSubProp.Water },
+            { "2", FeatureSubProp.Two },
+            { "city", FeatureSubProp.City },
+            { "town", FeatureSubProp.Town },
+            { "locality", FeatureSubProp.Locality },
+            { "hamlet", FeatureSubProp.Hamlet },
+            { "administrative", FeatureSubProp.Administrative },
+            { "forest", FeatureSubProp.Forest },
+            { "orchard", FeatureSubProp.Orchard },
+            { "residential", FeatureSubProp.Residential },
+            { "cemetery", FeatureSubProp.Cemetery },
+            { "industrial", FeatureSubProp.Industrial },
+            { "commercial", FeatureSubProp.Commercial },
+            { "square", FeatureSubProp.Square },
+            { "construction", FeatureSubProp.Construction },
+            { "military", FeatureSubProp.Military },
+            { "quarry", FeatureSubProp.Quarry },
+            { "brownfield", FeatureSubProp.Brownfield },
+            { "farm", FeatureSubProp.Farm },
+            { "meadow", FeatureSubProp.Meadow },
+            { "grass", FeatureSubProp.Grass },
+            { "greenfield", FeatureSubProp.Greenfield },
+            { "recreation_ground", FeatureSubProp.RecreationGround },
+            { "winter_sports", FeatureSubProp.WinterSports },
+            { "allotments", FeatureSubProp.Allotments },
+            { "reservoir", FeatureSubProp.Reservoir },
+            { "basin", FeatureSubProp.Basin }
+        };
+
+        if (dict.ContainsKey(subPropName))
+            return dict[subPropName];
+
+        return FeatureSubProp.Unknown;
     }
 
     public static void Main(string[] args)

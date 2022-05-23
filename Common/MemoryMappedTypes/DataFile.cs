@@ -24,7 +24,7 @@ public readonly ref struct MapFeatureData
     public GeometryType Type { get; init; }
     public ReadOnlySpan<char> Label { get; init; }
     public ReadOnlySpan<Coordinate> Coordinates { get; init; }
-    public Dictionary<string, string> Properties { get; init; }
+    public Dictionary<FeatureProp, Tuple<string, FeatureSubProp>> Properties { get; init; }
 }
 
 /// <summary>
@@ -181,11 +181,22 @@ public unsafe class DataFile : IDisposable
 
                 if (isFeatureInBBox)
                 {
-                    var properties = new Dictionary<string, string>(feature->PropertyCount);
+                    var properties = new Dictionary<FeatureProp, Tuple<string, FeatureSubProp>>(feature->PropertyCount);
                     for (var p = 0; p < feature->PropertyCount; ++p)
                     {
-                        GetProperty(header.Tile.Value.StringsOffsetInBytes, header.Tile.Value.CharactersOffsetInBytes, p * 2 + feature->PropertiesOffset, out var key, out var value);
-                        properties.Add(key.ToString(), value.ToString());
+                        GetProperty(header.Tile.Value.StringsOffsetInBytes, header.Tile.Value.CharactersOffsetInBytes,
+                            p * 2 + feature->PropertiesOffset, out var key, out var value);
+                        
+                        if ((FeatureProp)(short)key.ToString()[0] != FeatureProp.Unknown)
+                        {
+                            FeatureProp kk = (FeatureProp)(short)key.ToString()[0];
+                            FeatureSubProp vv = (FeatureSubProp)(short)value.ToString()[0];
+                            if (vv == FeatureSubProp.Unknown)
+                                properties.Add(kk,
+                                    new Tuple<string, FeatureSubProp>(value.ToString(), FeatureSubProp.Unknown)); // Custom strings 
+                            else
+                                properties.Add(kk, new Tuple<string, FeatureSubProp>("", vv));
+                        }
                     }
 
                     if (!action(new MapFeatureData
